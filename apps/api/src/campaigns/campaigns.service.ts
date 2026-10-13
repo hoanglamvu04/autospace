@@ -136,7 +136,7 @@ export class CampaignsService implements OnModuleDestroy {
 
   async update(identifier: string, input: UpdateCampaignInput) {
     const campaign = await this.findRecord(identifier);
-    const data: Record<string, unknown> = {};
+    const data: any = {};
 
     if (input.name !== undefined) data.name = requiredText(input.name, 'name');
     if (input.slug !== undefined) {
@@ -144,7 +144,12 @@ export class CampaignsService implements OnModuleDestroy {
       if (!slug) throw new BadRequestException('slug is invalid');
       data.slug = slug;
     }
-    if (input.status !== undefined) data.status = input.status;
+    if (input.status !== undefined) {
+      if (!Object.values(CampaignStatus).includes(input.status)) {
+        throw new BadRequestException('status is invalid');
+      }
+      data.status = input.status;
+    }
     if (input.startsAt !== undefined) data.startsAt = optionalDate(input.startsAt, 'startsAt');
     if (input.endsAt !== undefined) data.endsAt = optionalDate(input.endsAt, 'endsAt');
 
@@ -188,7 +193,7 @@ export class CampaignsService implements OnModuleDestroy {
         externalId: input.externalId?.trim() || null,
         type: input.type,
         mode: input.mode,
-        metadata: input.metadata ?? undefined,
+        metadata: input.metadata as any,
       },
     });
   }
