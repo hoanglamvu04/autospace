@@ -1,0 +1,19 @@
+{
+  "name": "autospace",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @autospace/web\" \"npm run start:dev -w @autospace/api\" \"npm run dev -w @autospace/worker\"",
+    "build": "npm run build -w @autospace/web && npm run build -w @autospace/api && npm run build -w @autospace/worker",
+    "db:generate": "npm run prisma:generate -w @autospace/database",
+    "db:migrate": "npm run prisma:migrate -w @autospace/database",
+    "db:studio": "npm run prisma:studio -w @autospace/database"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
