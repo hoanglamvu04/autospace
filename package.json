@@ -1,7 +1,7 @@
 {
   "name": "autospace",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "engines": {
     "node": ">=22.18.0"
   },
@@ -11,14 +11,15 @@
   ],
   "scripts": {
     "dev": "concurrently -n web,api,worker \"npm run dev -w @autospace/web\" \"npm run start:dev -w @autospace/api\" \"npm run dev -w @autospace/worker\"",
-    "build": "npm run build -w @autospace/web && npm run build -w @autospace/api && npm run build -w @autospace/worker",
-    "db:generate": "dotenv -e .env -- prisma generate --schema packages/database/prisma/schema.prisma",
-    "db:migrate": "dotenv -e .env -- prisma migrate dev --schema packages/database/prisma/schema.prisma",
-    "db:studio": "dotenv -e .env -- prisma studio --schema packages/database/prisma/schema.prisma"
+    "build": "npm run db:generate && npm run build -w @autospace/database && npm run build -w @autospace/web && npm run build -w @autospace/api && npm run build -w @autospace/worker",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "dotenv-cli": "^10.0.0",
+    "dotenv": "^17.2.3",
     "prisma": "7.10.0",
     "typescript": "^5.9.3"
   }
