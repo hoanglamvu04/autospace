@@ -5,6 +5,8 @@ import {
   CreateContentInput,
   CreateTargetInput,
   UpdateCampaignInput,
+  UpdateContentInput,
+  UpdateTargetInput,
 } from './campaigns.service';
 
 @Controller('campaigns')
@@ -46,9 +48,32 @@ export class CampaignsController {
     return this.campaigns.addContent(id, body);
   }
 
+  @Patch(':id/content/:contentId')
+  updateContent(
+    @Param('id') id: string,
+    @Param('contentId') contentId: string,
+    @Body() body: UpdateContentInput,
+  ) {
+    return this.campaigns.updateContent(id, contentId, body);
+  }
+
+  @Delete(':id/content/:contentId')
+  removeContent(@Param('id') id: string, @Param('contentId') contentId: string) {
+    return this.campaigns.removeContent(id, contentId);
+  }
+
   @Post(':id/targets')
   addTarget(@Param('id') id: string, @Body() body: CreateTargetInput) {
     return this.campaigns.addTarget(id, body);
+  }
+
+  @Patch(':id/targets/:targetId')
+  updateTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @Body() body: UpdateTargetInput,
+  ) {
+    return this.campaigns.updateTarget(id, targetId, body);
   }
 
   @Delete(':id/targets/:targetId')
