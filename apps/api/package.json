@@ -1,13 +1,14 @@
 {
   "name": "@autospace/api",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "scripts": {
     "start:dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@autospace/database": "0.1.0",
     "@nestjs/common": "12.1.3",
     "@nestjs/core": "12.1.3",
     "@nestjs/platform-express": "12.1.3",
