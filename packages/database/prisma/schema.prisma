@@ -61,14 +61,15 @@ model Campaign {
 }
 
 model ContentVariant {
-  id         String   @id @default(cuid())
-  campaignId String
-  title      String?
-  body       String
-  mediaUrl   String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  campaignId  String
+  title       String?
+  body        String
+  mediaUrl    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  publishJobs PublishJob[]
 
   @@index([campaignId])
 }
@@ -104,18 +105,21 @@ model CampaignRun {
 }
 
 model PublishJob {
-  id         String           @id @default(cuid())
-  runId      String
-  targetId   String
-  bullJobId  String?
-  status     PublishJobStatus @default(QUEUED)
-  resultUrl  String?
-  error      String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  run        CampaignRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
-  target     DistributionTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  id               String           @id @default(cuid())
+  runId            String
+  targetId         String
+  contentVariantId String?
+  bullJobId        String?
+  status           PublishJobStatus @default(QUEUED)
+  resultUrl        String?
+  error            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  run              CampaignRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  target           DistributionTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  contentVariant   ContentVariant?  @relation(fields: [contentVariantId], references: [id], onDelete: SetNull)
 
   @@index([runId, status])
   @@index([targetId])
+  @@index([contentVariantId])
 }
