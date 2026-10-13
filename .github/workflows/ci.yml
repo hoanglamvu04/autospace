@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/autospace?schema=public
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +19,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.18.0
+          cache: npm
 
       - name: Install dependencies
         run: npm install
