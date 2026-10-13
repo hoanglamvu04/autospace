@@ -10,7 +10,8 @@
   "dependencies": {
     "@autospace/database": "0.1.0",
     "bullmq": "6.3.10",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^24.7.0",
