@@ -31,12 +31,18 @@ export type CreateContentInput = {
   mediaUrl?: string | null;
 };
 
+export type UpdateContentInput = Partial<CreateContentInput>;
+
 export type CreateTargetInput = {
   name?: string;
   externalId?: string | null;
   type?: TargetType;
   mode?: TargetMode;
   metadata?: Record<string, unknown> | null;
+};
+
+export type UpdateTargetInput = Partial<CreateTargetInput> & {
+  active?: boolean;
 };
 
 function requiredText(value: unknown, field: string) {
@@ -177,6 +183,35 @@ export class CampaignsService implements OnModuleDestroy {
     });
   }
 
+  async updateContent(identifier: string, contentId: string, input: UpdateContentInput) {
+    const campaign = await this.findRecord(identifier);
+    const content = await this.prisma.contentVariant.findFirst({
+      where: { id: contentId, campaignId: campaign.id },
+    });
+    if (!content) throw new NotFoundException('Content variant not found');
+
+    const data: any = {};
+    if (input.title !== undefined) data.title = input.title?.trim() || null;
+    if (input.body !== undefined) data.body = requiredText(input.body, 'body');
+    if (input.mediaUrl !== undefined) data.mediaUrl = input.mediaUrl?.trim() || null;
+
+    return this.prisma.contentVariant.update({
+      where: { id: content.id },
+      data,
+    });
+  }
+
+  async removeContent(identifier: string, contentId: string) {
+    const campaign = await this.findRecord(identifier);
+    const content = await this.prisma.contentVariant.findFirst({
+      where: { id: contentId, campaignId: campaign.id },
+    });
+    if (!content) throw new NotFoundException('Content variant not found');
+
+    await this.prisma.contentVariant.delete({ where: { id: content.id } });
+    return { deleted: true, id: content.id };
+  }
+
   async addTarget(identifier: string, input: CreateTargetInput) {
     const campaign = await this.findRecord(identifier);
     if (!input.type || !Object.values(TargetType).includes(input.type)) {
@@ -198,17 +233,39 @@ export class CampaignsService implements OnModuleDestroy {
     });
   }
 
-  async deactivateTarget(identifier: string, targetId: string) {
+  async updateTarget(identifier: string, targetId: string, input: UpdateTargetInput) {
     const campaign = await this.findRecord(identifier);
     const target = await this.prisma.distributionTarget.findFirst({
       where: { id: targetId, campaignId: campaign.id },
     });
     if (!target) throw new NotFoundException('Target not found');
 
+    const data: any = {};
+    if (input.name !== undefined) data.name = requiredText(input.name, 'name');
+    if (input.externalId !== undefined) data.externalId = input.externalId?.trim() || null;
+    if (input.type !== undefined) {
+      if (!Object.values(TargetType).includes(input.type)) {
+        throw new BadRequestException('type is invalid');
+      }
+      data.type = input.type;
+    }
+    if (input.mode !== undefined) {
+      if (!Object.values(TargetMode).includes(input.mode)) {
+        throw new BadRequestException('mode is invalid');
+      }
+      data.mode = input.mode;
+    }
+    if (input.metadata !== undefined) data.metadata = input.metadata as any;
+    if (input.active !== undefined) data.active = Boolean(input.active);
+
     return this.prisma.distributionTarget.update({
       where: { id: target.id },
-      data: { active: false },
+      data,
     });
+  }
+
+  async deactivateTarget(identifier: string, targetId: string) {
+    return this.updateTarget(identifier, targetId, { active: false });
   }
 
   async bootstrapDemo() {
