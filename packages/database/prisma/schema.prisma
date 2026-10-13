@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum TargetType {
+  FACEBOOK_PAGE
+  FACEBOOK_GROUP
+  WEBSITE
+  OTHER
+}
+
+enum TargetMode {
+  API
+  MANUAL_CONFIRMATION
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum PublishJobStatus {
+  QUEUED
+  RUNNING
+  AWAITING_CONFIRMATION
+  COMPLETED
+  FAILED
+}
+
+model Campaign {
+  id              String               @id @default(cuid())
+  name            String
+  slug            String               @unique
+  status          CampaignStatus       @default(DRAFT)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  contentVariants ContentVariant[]
+  targets         DistributionTarget[]
+  runs            CampaignRun[]
+}
+
+model ContentVariant {
+  id         String   @id @default(cuid())
+  campaignId String
+  title      String?
+  body       String
+  mediaUrl   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model DistributionTarget {
+  id         String       @id @default(cuid())
+  campaignId String
+  name       String
+  externalId String?
+  type       TargetType
+  mode       TargetMode
+  active     Boolean      @default(true)
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  publishJobs PublishJob[]
+
+  @@index([campaignId, active])
+}
+
+model CampaignRun {
+  id         String      @id @default(cuid())
+  campaignId String
+  status     RunStatus   @default(QUEUED)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime    @default(now())
+  campaign   Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  publishJobs PublishJob[]
+
+  @@index([campaignId, createdAt])
+}
+
+model PublishJob {
+  id         String           @id @default(cuid())
+  runId      String
+  targetId   String
+  bullJobId  String?
+  status     PublishJobStatus @default(QUEUED)
+  resultUrl  String?
+  error      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  run        CampaignRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  target     DistributionTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([runId, status])
+  @@index([targetId])
+}

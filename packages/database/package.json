@@ -1,0 +1,8 @@
+{
+  "name": "@autospace/database",
+  "private": true,
+  "version": "0.1.0",
+  "dependencies": {
+    "@prisma/client": "7.10.0"
+  }
+}
