@@ -159,10 +159,7 @@ export class CampaignsService implements OnModuleDestroy {
     if (input.startsAt !== undefined) data.startsAt = optionalDate(input.startsAt, 'startsAt');
     if (input.endsAt !== undefined) data.endsAt = optionalDate(input.endsAt, 'endsAt');
 
-    return this.prisma.campaign.update({
-      where: { id: campaign.id },
-      data,
-    });
+    return this.prisma.campaign.update({ where: { id: campaign.id }, data });
   }
 
   async remove(identifier: string) {
@@ -195,10 +192,7 @@ export class CampaignsService implements OnModuleDestroy {
     if (input.body !== undefined) data.body = requiredText(input.body, 'body');
     if (input.mediaUrl !== undefined) data.mediaUrl = input.mediaUrl?.trim() || null;
 
-    return this.prisma.contentVariant.update({
-      where: { id: content.id },
-      data,
-    });
+    return this.prisma.contentVariant.update({ where: { id: content.id }, data });
   }
 
   async removeContent(identifier: string, contentId: string) {
@@ -207,7 +201,6 @@ export class CampaignsService implements OnModuleDestroy {
       where: { id: contentId, campaignId: campaign.id },
     });
     if (!content) throw new NotFoundException('Content variant not found');
-
     await this.prisma.contentVariant.delete({ where: { id: content.id } });
     return { deleted: true, id: content.id };
   }
@@ -244,24 +237,17 @@ export class CampaignsService implements OnModuleDestroy {
     if (input.name !== undefined) data.name = requiredText(input.name, 'name');
     if (input.externalId !== undefined) data.externalId = input.externalId?.trim() || null;
     if (input.type !== undefined) {
-      if (!Object.values(TargetType).includes(input.type)) {
-        throw new BadRequestException('type is invalid');
-      }
+      if (!Object.values(TargetType).includes(input.type)) throw new BadRequestException('type is invalid');
       data.type = input.type;
     }
     if (input.mode !== undefined) {
-      if (!Object.values(TargetMode).includes(input.mode)) {
-        throw new BadRequestException('mode is invalid');
-      }
+      if (!Object.values(TargetMode).includes(input.mode)) throw new BadRequestException('mode is invalid');
       data.mode = input.mode;
     }
     if (input.metadata !== undefined) data.metadata = input.metadata as any;
     if (input.active !== undefined) data.active = Boolean(input.active);
 
-    return this.prisma.distributionTarget.update({
-      where: { id: target.id },
-      data,
-    });
+    return this.prisma.distributionTarget.update({ where: { id: target.id }, data });
   }
 
   async deactivateTarget(identifier: string, targetId: string) {
@@ -269,47 +255,54 @@ export class CampaignsService implements OnModuleDestroy {
   }
 
   async bootstrapDemo() {
-    const existing = await this.prisma.campaign.findUnique({
-      where: { slug: 'hola-halo' },
-    });
+    const existing = await this.prisma.campaign.findUnique({ where: { slug: 'hola-halo' } });
     if (existing) return this.findOne(existing.id);
 
     const campaign = await this.prisma.campaign.create({
       data: {
-        name: 'Hola Halo · Nhìn Hòa Lạc',
+        name: 'HALO HOLA 2026 · 52 góc nhìn · 1 Hòa Lạc',
         slug: 'hola-halo',
+        status: CampaignStatus.RUNNING,
+        startsAt: new Date('2026-10-10T00:00:00+07:00'),
+        endsAt: new Date('2026-11-10T23:59:00+07:00'),
         contentVariants: {
           create: [
             {
-              title: 'Giới thiệu cuộc thi',
-              body: 'Hola Halo · Nhìn Hòa Lạc là chiến dịch mẫu. Hãy thay nội dung này bằng bài chính thức trước khi kết nối provider.',
+              title: 'Công bố · 52 góc nhìn · 1 Hòa Lạc',
+              body: 'HALO HOLA 2026 chính thức mở cổng. 52 góc nhìn · 1 Hòa Lạc — hãy kể Hòa Lạc theo cách của bạn qua ảnh, video, câu chuyện hoặc thiết kế. Tham gia miễn phí, có thể sáng tạo ngay bằng điện thoại. Hạn nhận bài: 23:59 ngày 10/11/2026. 15 giải thưởng, tổng giá trị 29 triệu đồng; giải cao nhất 10 triệu đồng + cúp. Xem thông tin và gửi bài tại holahalo.vn.',
             },
             {
-              title: 'Góc nhìn cộng đồng',
-              body: 'Bạn thích góc nào của Hòa Lạc nhất? Đây là biến thể nội dung mẫu để kiểm thử luồng phân phối.',
+              title: 'Câu hỏi cộng đồng · Hòa Lạc trong bạn là gì?',
+              body: 'Nếu chỉ chọn một hình ảnh để kể về Hòa Lạc, bạn sẽ chọn điều gì: một bức tường đá ong, màu xanh sau cơn mưa, nắng trên campus hay một câu chuyện rất riêng? HALO HOLA 2026 đang tìm 52 góc nhìn như thế. Chọn chủ đề của bạn, sáng tạo và kể lại theo cách của chính mình. Hạn gửi bài 23:59 ngày 10/11/2026 · holahalo.vn.',
+            },
+            {
+              title: '8 chủ đề sáng tạo',
+              body: 'Bạn có thể bắt đầu từ 1 trong 8 chủ đề của HALO HOLA 2026: Nét Đoài · Sắc Mường · Không gian Kiến trúc · Hòa Lạc xanh · Nắng Hòa Lạc · Câu chuyện Hòa Lạc · Ước mơ Hòa Lạc · Sắc màu Hòa Lạc. Không cần máy ảnh chuyên nghiệp — ảnh, video, story hay thiết kế đều có thể trở thành góc nhìn của bạn. Tham gia miễn phí tại holahalo.vn.',
+            },
+            {
+              title: 'CTA · Đừng chỉ đi qua Hòa Lạc',
+              body: 'Đừng chỉ đi qua Hòa Lạc. Hãy nhìn. Hãy cảm. Và kể lại theo cách của bạn. HALO HOLA 2026 nhận bài đến 23:59 ngày 10/11/2026. 15 giải thưởng với tổng giá trị 29 triệu đồng, giải cao nhất 10 triệu đồng + cúp. Gửi tác phẩm tại holahalo.vn.',
+            },
+            {
+              title: 'Sắc màu Hòa Lạc',
+              body: 'Hòa Lạc trong mắt bạn có màu gì? Màu đá ong, nắng ấm, xanh rêu, xanh non hay những màu sắc đến từ kiến trúc, cảnh quan, đời sống và con người? Hãy biến màu sắc bạn nhìn thấy thành một tác phẩm cho HALO HOLA 2026. Tham gia miễn phí tại holahalo.vn.',
+            },
+            {
+              title: 'Dành cho sinh viên · Điện thoại là đủ',
+              body: 'Không cần thiết bị cầu kỳ. Một chiếc điện thoại và một góc nhìn riêng đã đủ để bắt đầu. Chụp một khoảnh khắc, quay một video ngắn, kể một câu chuyện hoặc thiết kế điều bạn cảm nhận về Hòa Lạc. HALO HOLA 2026 nhận bài đến 10/11/2026 tại holahalo.vn.',
             },
           ],
         },
         targets: {
           create: [
-            {
-              name: 'Facebook Page · Hola',
-              externalId: 'facebook-page-hola',
-              type: TargetType.FACEBOOK_PAGE,
-              mode: TargetMode.API,
-            },
-            {
-              name: 'Facebook Page · KTHL',
-              externalId: 'facebook-page-kthl',
-              type: TargetType.FACEBOOK_PAGE,
-              mode: TargetMode.API,
-            },
-            {
-              name: 'Community Group · Demo',
-              externalId: 'community-group-demo',
-              type: TargetType.FACEBOOK_GROUP,
-              mode: TargetMode.MANUAL_CONFIRMATION,
-            },
+            { name: 'Facebook Page · HALO HOLA', externalId: 'halo-hola-page', type: TargetType.FACEBOOK_PAGE, mode: TargetMode.API, metadata: { tags: ['Hòa Lạc', 'cuộc thi', 'sáng tạo'], priority: 1 } },
+            { name: 'Facebook Page · Đô Thị Hòa Lạc', externalId: 'dothihoalac-page', type: TargetType.FACEBOOK_PAGE, mode: TargetMode.API, metadata: { tags: ['Hòa Lạc', 'địa phương', 'cộng đồng'], priority: 2 } },
+            { name: 'Facebook Page · Kiến Trúc Hòa Lạc', externalId: 'kientruchoalac-page', type: TargetType.FACEBOOK_PAGE, mode: TargetMode.API, metadata: { tags: ['kiến trúc', 'Hòa Lạc'], priority: 3 } },
+            { name: 'Website · HALO HOLA', externalId: 'holahalo.vn', type: TargetType.WEBSITE, mode: TargetMode.API, metadata: { tags: ['owned', 'landing-page'], priority: 1 } },
+            { name: 'Website · Đô Thị Hòa Lạc', externalId: 'dothihoalac.vn', type: TargetType.WEBSITE, mode: TargetMode.API, metadata: { tags: ['owned', 'community'], priority: 2 } },
+            { name: 'Group · CHECK IN HOALAC', externalId: 'check-in-hoalac', type: TargetType.FACEBOOK_GROUP, mode: TargetMode.MANUAL_CONFIRMATION, metadata: { tags: ['check-in', 'Hòa Lạc', 'cộng đồng'], priority: 1 } },
+            { name: 'Cộng đồng · Sinh viên Hòa Lạc', externalId: 'student-community-demo', type: TargetType.FACEBOOK_GROUP, mode: TargetMode.MANUAL_CONFIRMATION, metadata: { tags: ['sinh viên', 'campus'], priority: 2 } },
+            { name: 'Cộng đồng · Nhiếp ảnh Hòa Lạc', externalId: 'photo-community-demo', type: TargetType.FACEBOOK_GROUP, mode: TargetMode.MANUAL_CONFIRMATION, metadata: { tags: ['nhiếp ảnh', 'sáng tạo'], priority: 2 } },
           ],
         },
       },
@@ -343,18 +336,13 @@ export class CampaignsService implements OnModuleDestroy {
           })),
         },
       },
-      include: {
-        publishJobs: { include: { target: true, contentVariant: true } },
-      },
+      include: { publishJobs: { include: { target: true, contentVariant: true } } },
     });
 
     try {
       await this.queue.addBulk(
         run.publishJobs.map((publishJob) => ({
-          name:
-            publishJob.target.mode === TargetMode.API
-              ? 'publish-authorized-target'
-              : 'prepare-manual-target',
+          name: publishJob.target.mode === TargetMode.API ? 'publish-authorized-target' : 'prepare-manual-target',
           data: {
             campaignId: campaign.id,
             runId: run.id,
@@ -366,31 +354,18 @@ export class CampaignsService implements OnModuleDestroy {
           opts: {
             jobId: publishJob.id,
             attempts: publishJob.target.mode === TargetMode.API ? 3 : 1,
-            backoff:
-              publishJob.target.mode === TargetMode.API
-                ? { type: 'exponential', delay: 3000 }
-                : undefined,
+            backoff: publishJob.target.mode === TargetMode.API ? { type: 'exponential', delay: 3000 } : undefined,
             removeOnComplete: 200,
             removeOnFail: 500,
           },
         })),
       );
-
-      await this.prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { status: CampaignStatus.RUNNING },
-      });
+      await this.prisma.campaign.update({ where: { id: campaign.id }, data: { status: CampaignStatus.RUNNING } });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Queue unavailable';
       await this.prisma.$transaction([
-        this.prisma.campaignRun.update({
-          where: { id: run.id },
-          data: { status: RunStatus.FAILED, finishedAt: new Date() },
-        }),
-        this.prisma.publishJob.updateMany({
-          where: { runId: run.id },
-          data: { status: PublishJobStatus.FAILED, error: message },
-        }),
+        this.prisma.campaignRun.update({ where: { id: run.id }, data: { status: RunStatus.FAILED, finishedAt: new Date() } }),
+        this.prisma.publishJob.updateMany({ where: { runId: run.id }, data: { status: PublishJobStatus.FAILED, error: message } }),
       ]);
       throw new BadRequestException(`Could not queue campaign: ${message}`);
     }
@@ -400,17 +375,13 @@ export class CampaignsService implements OnModuleDestroy {
       runId: run.id,
       queued: run.publishJobs.length,
       apiTargets: run.publishJobs.filter((job) => job.target.mode === TargetMode.API).length,
-      manualTargets: run.publishJobs.filter(
-        (job) => job.target.mode === TargetMode.MANUAL_CONFIRMATION,
-      ).length,
+      manualTargets: run.publishJobs.filter((job) => job.target.mode === TargetMode.MANUAL_CONFIRMATION).length,
       status: RunStatus.QUEUED,
     };
   }
 
   private async findRecord(identifier: string) {
-    const campaign = await this.prisma.campaign.findFirst({
-      where: { OR: [{ id: identifier }, { slug: identifier }] },
-    });
+    const campaign = await this.prisma.campaign.findFirst({ where: { OR: [{ id: identifier }, { slug: identifier }] } });
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
   }
