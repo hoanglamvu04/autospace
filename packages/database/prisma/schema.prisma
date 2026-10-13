@@ -1,10 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum CampaignStatus {
@@ -31,6 +32,7 @@ enum TargetMode {
 enum RunStatus {
   QUEUED
   RUNNING
+  PREPARED
   COMPLETED
   FAILED
 }
@@ -38,6 +40,7 @@ enum RunStatus {
 enum PublishJobStatus {
   QUEUED
   RUNNING
+  READY_FOR_PROVIDER
   AWAITING_CONFIRMATION
   COMPLETED
   FAILED
@@ -71,30 +74,30 @@ model ContentVariant {
 }
 
 model DistributionTarget {
-  id         String       @id @default(cuid())
-  campaignId String
-  name       String
-  externalId String?
-  type       TargetType
-  mode       TargetMode
-  active     Boolean      @default(true)
-  metadata   Json?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  campaign   Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  campaignId  String
+  name        String
+  externalId  String?
+  type        TargetType
+  mode        TargetMode
+  active      Boolean      @default(true)
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   publishJobs PublishJob[]
 
   @@index([campaignId, active])
 }
 
 model CampaignRun {
-  id         String      @id @default(cuid())
-  campaignId String
-  status     RunStatus   @default(QUEUED)
-  startedAt  DateTime?
-  finishedAt DateTime?
-  createdAt  DateTime    @default(now())
-  campaign   Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  campaignId  String
+  status      RunStatus    @default(QUEUED)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   publishJobs PublishJob[]
 
   @@index([campaignId, createdAt])
