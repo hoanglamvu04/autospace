@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n web,api,worker \"npm run dev -w @autospace/web\" \"npm run start:dev -w @autospace/api\" \"npm run dev -w @autospace/worker\"",
+    "dev": "npm run db:generate && npm run build -w @autospace/database && concurrently -n web,api,worker \"npm run dev -w @autospace/web\" \"npm run start:dev -w @autospace/api\" \"npm run dev -w @autospace/worker\"",
     "build": "npm run db:generate && npm run build -w @autospace/database && npm run build -w @autospace/web && npm run build -w @autospace/api && npm run build -w @autospace/worker",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
