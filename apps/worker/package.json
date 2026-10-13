@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@autospace/database": "0.1.0",
-    "bullmq": "6.3.13",
+    "bullmq": "6.3.10",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {
