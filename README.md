@@ -39,6 +39,24 @@ Mặc định:
 3. Worker phân loại target được phép tự động và target cần xác nhận.
 4. Kết quả xử lý được log; bước tiếp theo sẽ lưu job/result vào PostgreSQL và nối provider thực tế.
 
+## Triển khai VPS không Docker
+
+Cài Node.js 22, PostgreSQL, Redis và PM2 trên VPS. Sau đó:
+
+```bash
+git clone https://github.com/hoanglamvu04/autospace.git
+cd autospace
+cp .env.example .env
+npm install
+npm run db:generate
+npm run db:migrate
+npm run build
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+Khi cấu hình domain thật, đặt `WEB_ORIGIN` và `NEXT_PUBLIC_API_URL` đúng domain trước khi chạy `npm run build`. Có thể đặt `NEXT_PUBLIC_API_URL` trong `apps/web/.env.production.local` để Next.js lấy biến public ở thời điểm build.
+
 ## Nguyên tắc tích hợp kênh
 
 Provider chỉ được triển khai tự động khi tài khoản/kênh đã cấp quyền hợp lệ. Các group, website hoặc bề mặt không có API/quyền xuất bản phù hợp sẽ dùng chế độ `MANUAL_CONFIRMATION` thay vì bot giả lập người dùng.
