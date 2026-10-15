@@ -56,9 +56,7 @@ function optionalDate(value: string | null | undefined, field: string) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException(`${field} must be a valid date`);
-  }
+  if (Number.isNaN(date.getTime())) throw new BadRequestException(`${field} must be a valid date`);
   return date;
 }
 
@@ -90,9 +88,7 @@ export class CampaignsService implements OnModuleDestroy {
     return this.prisma.campaign.findMany({
       orderBy: { updatedAt: 'desc' },
       include: {
-        _count: {
-          select: { contentVariants: true, targets: true, runs: true },
-        },
+        _count: { select: { contentVariants: true, targets: true, runs: true } },
         runs: {
           orderBy: { createdAt: 'desc' },
           take: 1,
@@ -120,7 +116,6 @@ export class CampaignsService implements OnModuleDestroy {
         },
       },
     });
-
     if (!campaign) throw new NotFoundException('Campaign not found');
     return campaign;
   }
@@ -129,7 +124,6 @@ export class CampaignsService implements OnModuleDestroy {
     const name = requiredText(input.name, 'name');
     const slug = slugify(input.slug?.trim() || name);
     if (!slug) throw new BadRequestException('slug is invalid');
-
     return this.prisma.campaign.create({
       data: {
         name,
@@ -143,7 +137,6 @@ export class CampaignsService implements OnModuleDestroy {
   async update(identifier: string, input: UpdateCampaignInput) {
     const campaign = await this.findRecord(identifier);
     const data: any = {};
-
     if (input.name !== undefined) data.name = requiredText(input.name, 'name');
     if (input.slug !== undefined) {
       const slug = slugify(requiredText(input.slug, 'slug'));
@@ -151,14 +144,11 @@ export class CampaignsService implements OnModuleDestroy {
       data.slug = slug;
     }
     if (input.status !== undefined) {
-      if (!Object.values(CampaignStatus).includes(input.status)) {
-        throw new BadRequestException('status is invalid');
-      }
+      if (!Object.values(CampaignStatus).includes(input.status)) throw new BadRequestException('status is invalid');
       data.status = input.status;
     }
     if (input.startsAt !== undefined) data.startsAt = optionalDate(input.startsAt, 'startsAt');
     if (input.endsAt !== undefined) data.endsAt = optionalDate(input.endsAt, 'endsAt');
-
     return this.prisma.campaign.update({ where: { id: campaign.id }, data });
   }
 
@@ -182,24 +172,18 @@ export class CampaignsService implements OnModuleDestroy {
 
   async updateContent(identifier: string, contentId: string, input: UpdateContentInput) {
     const campaign = await this.findRecord(identifier);
-    const content = await this.prisma.contentVariant.findFirst({
-      where: { id: contentId, campaignId: campaign.id },
-    });
+    const content = await this.prisma.contentVariant.findFirst({ where: { id: contentId, campaignId: campaign.id } });
     if (!content) throw new NotFoundException('Content variant not found');
-
     const data: any = {};
     if (input.title !== undefined) data.title = input.title?.trim() || null;
     if (input.body !== undefined) data.body = requiredText(input.body, 'body');
     if (input.mediaUrl !== undefined) data.mediaUrl = input.mediaUrl?.trim() || null;
-
     return this.prisma.contentVariant.update({ where: { id: content.id }, data });
   }
 
   async removeContent(identifier: string, contentId: string) {
     const campaign = await this.findRecord(identifier);
-    const content = await this.prisma.contentVariant.findFirst({
-      where: { id: contentId, campaignId: campaign.id },
-    });
+    const content = await this.prisma.contentVariant.findFirst({ where: { id: contentId, campaignId: campaign.id } });
     if (!content) throw new NotFoundException('Content variant not found');
     await this.prisma.contentVariant.delete({ where: { id: content.id } });
     return { deleted: true, id: content.id };
@@ -207,13 +191,8 @@ export class CampaignsService implements OnModuleDestroy {
 
   async addTarget(identifier: string, input: CreateTargetInput) {
     const campaign = await this.findRecord(identifier);
-    if (!input.type || !Object.values(TargetType).includes(input.type)) {
-      throw new BadRequestException('type is invalid');
-    }
-    if (!input.mode || !Object.values(TargetMode).includes(input.mode)) {
-      throw new BadRequestException('mode is invalid');
-    }
-
+    if (!input.type || !Object.values(TargetType).includes(input.type)) throw new BadRequestException('type is invalid');
+    if (!input.mode || !Object.values(TargetMode).includes(input.mode)) throw new BadRequestException('mode is invalid');
     return this.prisma.distributionTarget.create({
       data: {
         campaignId: campaign.id,
@@ -228,11 +207,8 @@ export class CampaignsService implements OnModuleDestroy {
 
   async updateTarget(identifier: string, targetId: string, input: UpdateTargetInput) {
     const campaign = await this.findRecord(identifier);
-    const target = await this.prisma.distributionTarget.findFirst({
-      where: { id: targetId, campaignId: campaign.id },
-    });
+    const target = await this.prisma.distributionTarget.findFirst({ where: { id: targetId, campaignId: campaign.id } });
     if (!target) throw new NotFoundException('Target not found');
-
     const data: any = {};
     if (input.name !== undefined) data.name = requiredText(input.name, 'name');
     if (input.externalId !== undefined) data.externalId = input.externalId?.trim() || null;
@@ -246,7 +222,6 @@ export class CampaignsService implements OnModuleDestroy {
     }
     if (input.metadata !== undefined) data.metadata = input.metadata as any;
     if (input.active !== undefined) data.active = Boolean(input.active);
-
     return this.prisma.distributionTarget.update({ where: { id: target.id }, data });
   }
 
@@ -267,30 +242,12 @@ export class CampaignsService implements OnModuleDestroy {
         endsAt: new Date('2026-11-10T23:59:00+07:00'),
         contentVariants: {
           create: [
-            {
-              title: 'Công bố · 52 góc nhìn · 1 Hòa Lạc',
-              body: 'HALO HOLA 2026 chính thức mở cổng. 52 góc nhìn · 1 Hòa Lạc — hãy kể Hòa Lạc theo cách của bạn qua ảnh, video, câu chuyện hoặc thiết kế. Tham gia miễn phí, có thể sáng tạo ngay bằng điện thoại. Hạn nhận bài: 23:59 ngày 10/11/2026. 15 giải thưởng, tổng giá trị 29 triệu đồng; giải cao nhất 10 triệu đồng + cúp. Xem thông tin và gửi bài tại holahalo.vn.',
-            },
-            {
-              title: 'Câu hỏi cộng đồng · Hòa Lạc trong bạn là gì?',
-              body: 'Nếu chỉ chọn một hình ảnh để kể về Hòa Lạc, bạn sẽ chọn điều gì: một bức tường đá ong, màu xanh sau cơn mưa, nắng trên campus hay một câu chuyện rất riêng? HALO HOLA 2026 đang tìm 52 góc nhìn như thế. Chọn chủ đề của bạn, sáng tạo và kể lại theo cách của chính mình. Hạn gửi bài 23:59 ngày 10/11/2026 · holahalo.vn.',
-            },
-            {
-              title: '8 chủ đề sáng tạo',
-              body: 'Bạn có thể bắt đầu từ 1 trong 8 chủ đề của HALO HOLA 2026: Nét Đoài · Sắc Mường · Không gian Kiến trúc · Hòa Lạc xanh · Nắng Hòa Lạc · Câu chuyện Hòa Lạc · Ước mơ Hòa Lạc · Sắc màu Hòa Lạc. Không cần máy ảnh chuyên nghiệp — ảnh, video, story hay thiết kế đều có thể trở thành góc nhìn của bạn. Tham gia miễn phí tại holahalo.vn.',
-            },
-            {
-              title: 'CTA · Đừng chỉ đi qua Hòa Lạc',
-              body: 'Đừng chỉ đi qua Hòa Lạc. Hãy nhìn. Hãy cảm. Và kể lại theo cách của bạn. HALO HOLA 2026 nhận bài đến 23:59 ngày 10/11/2026. 15 giải thưởng với tổng giá trị 29 triệu đồng, giải cao nhất 10 triệu đồng + cúp. Gửi tác phẩm tại holahalo.vn.',
-            },
-            {
-              title: 'Sắc màu Hòa Lạc',
-              body: 'Hòa Lạc trong mắt bạn có màu gì? Màu đá ong, nắng ấm, xanh rêu, xanh non hay những màu sắc đến từ kiến trúc, cảnh quan, đời sống và con người? Hãy biến màu sắc bạn nhìn thấy thành một tác phẩm cho HALO HOLA 2026. Tham gia miễn phí tại holahalo.vn.',
-            },
-            {
-              title: 'Dành cho sinh viên · Điện thoại là đủ',
-              body: 'Không cần thiết bị cầu kỳ. Một chiếc điện thoại và một góc nhìn riêng đã đủ để bắt đầu. Chụp một khoảnh khắc, quay một video ngắn, kể một câu chuyện hoặc thiết kế điều bạn cảm nhận về Hòa Lạc. HALO HOLA 2026 nhận bài đến 10/11/2026 tại holahalo.vn.',
-            },
+            { title: 'Công bố · 52 góc nhìn · 1 Hòa Lạc', body: 'HALO HOLA 2026 chính thức mở cổng. 52 góc nhìn · 1 Hòa Lạc — hãy kể Hòa Lạc theo cách của bạn qua ảnh, video, câu chuyện hoặc thiết kế. Tham gia miễn phí, có thể sáng tạo ngay bằng điện thoại. Hạn nhận bài: 23:59 ngày 10/11/2026. 15 giải thưởng, tổng giá trị 29 triệu đồng; giải cao nhất 10 triệu đồng + cúp. Xem thông tin và gửi bài tại holahalo.vn.' },
+            { title: 'Câu hỏi cộng đồng · Hòa Lạc trong bạn là gì?', body: 'Nếu chỉ chọn một hình ảnh để kể về Hòa Lạc, bạn sẽ chọn điều gì: một bức tường đá ong, màu xanh sau cơn mưa, nắng trên campus hay một câu chuyện rất riêng? HALO HOLA 2026 đang tìm 52 góc nhìn như thế. Chọn chủ đề của bạn, sáng tạo và kể lại theo cách của chính mình. Hạn gửi bài 23:59 ngày 10/11/2026 · holahalo.vn.' },
+            { title: '8 chủ đề sáng tạo', body: 'Bạn có thể bắt đầu từ 1 trong 8 chủ đề của HALO HOLA 2026: Nét Đoài · Sắc Mường · Không gian Kiến trúc · Hòa Lạc xanh · Nắng Hòa Lạc · Câu chuyện Hòa Lạc · Ước mơ Hòa Lạc · Sắc màu Hòa Lạc. Không cần máy ảnh chuyên nghiệp — ảnh, video, story hay thiết kế đều có thể trở thành góc nhìn của bạn. Tham gia miễn phí tại holahalo.vn.' },
+            { title: 'CTA · Đừng chỉ đi qua Hòa Lạc', body: 'Đừng chỉ đi qua Hòa Lạc. Hãy nhìn. Hãy cảm. Và kể lại theo cách của bạn. HALO HOLA 2026 nhận bài đến 23:59 ngày 10/11/2026. 15 giải thưởng với tổng giá trị 29 triệu đồng, giải cao nhất 10 triệu đồng + cúp. Gửi tác phẩm tại holahalo.vn.' },
+            { title: 'Sắc màu Hòa Lạc', body: 'Hòa Lạc trong mắt bạn có màu gì? Màu đá ong, nắng ấm, xanh rêu, xanh non hay những màu sắc đến từ kiến trúc, cảnh quan, đời sống và con người? Hãy biến màu sắc bạn nhìn thấy thành một tác phẩm cho HALO HOLA 2026. Tham gia miễn phí tại holahalo.vn.' },
+            { title: 'Dành cho sinh viên · Điện thoại là đủ', body: 'Không cần thiết bị cầu kỳ. Một chiếc điện thoại và một góc nhìn riêng đã đủ để bắt đầu. Chụp một khoảnh khắc, quay một video ngắn, kể một câu chuyện hoặc thiết kế điều bạn cảm nhận về Hòa Lạc. HALO HOLA 2026 nhận bài đến 10/11/2026 tại holahalo.vn.' },
           ],
         },
         targets: {
@@ -307,7 +264,6 @@ export class CampaignsService implements OnModuleDestroy {
         },
       },
     });
-
     return this.findOne(campaign.id);
   }
 
@@ -340,26 +296,7 @@ export class CampaignsService implements OnModuleDestroy {
     });
 
     try {
-      await this.queue.addBulk(
-        run.publishJobs.map((publishJob) => ({
-          name: publishJob.target.mode === TargetMode.API ? 'publish-authorized-target' : 'prepare-manual-target',
-          data: {
-            campaignId: campaign.id,
-            runId: run.id,
-            publishJobId: publishJob.id,
-            targetId: publishJob.targetId,
-            contentVariantId: publishJob.contentVariantId,
-            mode: publishJob.target.mode,
-          },
-          opts: {
-            jobId: publishJob.id,
-            attempts: publishJob.target.mode === TargetMode.API ? 3 : 1,
-            backoff: publishJob.target.mode === TargetMode.API ? { type: 'exponential', delay: 3000 } : undefined,
-            removeOnComplete: 200,
-            removeOnFail: 500,
-          },
-        })),
-      );
+      await this.queue.addBulk(run.publishJobs.map((job) => this.queuePayload(campaign.id, run.id, job)));
       await this.prisma.campaign.update({ where: { id: campaign.id }, data: { status: CampaignStatus.RUNNING } });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Queue unavailable';
@@ -377,6 +314,79 @@ export class CampaignsService implements OnModuleDestroy {
       apiTargets: run.publishJobs.filter((job) => job.target.mode === TargetMode.API).length,
       manualTargets: run.publishJobs.filter((job) => job.target.mode === TargetMode.MANUAL_CONFIRMATION).length,
       status: RunStatus.QUEUED,
+      mode: 'DRY_RUN',
+    };
+  }
+
+  async retryJob(identifier: string, runId: string, jobId: string) {
+    const campaign = await this.findRecord(identifier);
+    const job = await this.prisma.publishJob.findFirst({
+      where: { id: jobId, runId, run: { campaignId: campaign.id } },
+      include: { target: true, contentVariant: true },
+    });
+    if (!job) throw new NotFoundException('Publish job not found');
+    if (job.status !== PublishJobStatus.FAILED) throw new BadRequestException('Only failed jobs can be retried');
+
+    await this.prisma.$transaction([
+      this.prisma.publishJob.update({
+        where: { id: job.id },
+        data: { status: PublishJobStatus.QUEUED, error: null, bullJobId: null },
+      }),
+      this.prisma.campaignRun.update({
+        where: { id: runId },
+        data: { status: RunStatus.QUEUED, finishedAt: null },
+      }),
+    ]);
+
+    try {
+      await this.queue.add(
+        job.target.mode === TargetMode.API ? 'publish-authorized-target' : 'prepare-manual-target',
+        {
+          campaignId: campaign.id,
+          runId,
+          publishJobId: job.id,
+          targetId: job.targetId,
+          contentVariantId: job.contentVariantId,
+          mode: job.target.mode,
+        },
+        {
+          jobId: `${job.id}-retry-${Date.now()}`,
+          attempts: job.target.mode === TargetMode.API ? 3 : 1,
+          backoff: job.target.mode === TargetMode.API ? { type: 'exponential', delay: 3000 } : undefined,
+          removeOnComplete: 200,
+          removeOnFail: 500,
+        },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Queue unavailable';
+      await this.prisma.$transaction([
+        this.prisma.publishJob.update({ where: { id: job.id }, data: { status: PublishJobStatus.FAILED, error: message } }),
+        this.prisma.campaignRun.update({ where: { id: runId }, data: { status: RunStatus.FAILED, finishedAt: new Date() } }),
+      ]);
+      throw new BadRequestException(`Could not retry job: ${message}`);
+    }
+
+    return { runId, jobId: job.id, status: PublishJobStatus.QUEUED, mode: 'DRY_RUN' };
+  }
+
+  private queuePayload(campaignId: string, runId: string, publishJob: any) {
+    return {
+      name: publishJob.target.mode === TargetMode.API ? 'publish-authorized-target' : 'prepare-manual-target',
+      data: {
+        campaignId,
+        runId,
+        publishJobId: publishJob.id,
+        targetId: publishJob.targetId,
+        contentVariantId: publishJob.contentVariantId,
+        mode: publishJob.target.mode,
+      },
+      opts: {
+        jobId: publishJob.id,
+        attempts: publishJob.target.mode === TargetMode.API ? 3 : 1,
+        backoff: publishJob.target.mode === TargetMode.API ? { type: 'exponential', delay: 3000 } : undefined,
+        removeOnComplete: 200,
+        removeOnFail: 500,
+      },
     };
   }
 
