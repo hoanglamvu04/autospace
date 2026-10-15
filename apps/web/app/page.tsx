@@ -36,6 +36,15 @@ type PublishJob = {
   contentVariant: ContentVariant | null;
 };
 
+type CampaignRun = {
+  id: string;
+  status: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  publishJobs: PublishJob[];
+};
+
 type CampaignDetail = {
   id: string;
   name: string;
@@ -45,14 +54,7 @@ type CampaignDetail = {
   endsAt: string | null;
   contentVariants: ContentVariant[];
   targets: DistributionTarget[];
-  runs: Array<{
-    id: string;
-    status: string;
-    createdAt: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    publishJobs: PublishJob[];
-  }>;
+  runs: CampaignRun[];
 };
 
 type RunResult = {
@@ -62,6 +64,7 @@ type RunResult = {
   apiTargets: number;
   manualTargets: number;
   status: string;
+  mode?: string;
 };
 
 type View = 'overview' | 'campaign' | 'content' | 'targets' | 'runs';
@@ -95,11 +98,11 @@ function statusLabel(value: string) {
     SCHEDULED: 'Đã lên lịch',
     RUNNING: 'Đang chạy',
     PAUSED: 'Tạm dừng',
-    PREPARED: 'Đã chuẩn bị',
+    PREPARED: 'Dry run hoàn tất',
     COMPLETED: 'Hoàn tất',
     FAILED: 'Lỗi',
     QUEUED: 'Đang chờ',
-    READY_FOR_PROVIDER: 'Chờ provider',
+    READY_FOR_PROVIDER: 'Sẵn sàng cho provider',
     AWAITING_CONFIRMATION: 'Chờ xác nhận',
   };
   return labels[value] ?? value;
@@ -107,6 +110,20 @@ function statusLabel(value: string) {
 
 function shortId(value: string) {
   return value.length > 14 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value;
+}
+
+function statsForRun(run?: CampaignRun) {
+  const jobs = run?.publishJobs ?? [];
+  const count = (status: string) => jobs.filter((job) => job.status === status).length;
+  const queued = count('QUEUED');
+  const running = count('RUNNING');
+  const ready = count('READY_FOR_PROVIDER');
+  const manual = count('AWAITING_CONFIRMATION');
+  const failed = count('FAILED');
+  const completed = count('COMPLETED');
+  const resolved = ready + manual + failed + completed;
+  const progress = jobs.length ? Math.round((resolved / jobs.length) * 100) : 0;
+  return { total: jobs.length, queued, running, ready, manual, failed, completed, progress };
 }
 
 export default function HomePage() {
@@ -117,6 +134,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [running, setRunning] = useState(false);
+  const [retryingJobId, setRetryingJobId] = useState('');
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -161,13 +179,17 @@ export default function HomePage() {
     setCampaign(detail);
   }
 
+  async function refreshDetail(id: string) {
+    const detail = await request<CampaignDetail>(`/campaigns/${id}`);
+    setCampaign(detail);
+  }
+
   async function loadCampaign(id: string) {
     setSelectedId(id);
     setLoading(true);
     setError('');
     try {
-      const detail = await request<CampaignDetail>(`/campaigns/${id}`);
-      setCampaign(detail);
+      await refreshDetail(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tải chiến dịch');
     } finally {
@@ -186,7 +208,17 @@ export default function HomePage() {
     setEditCampaignName(campaign.name);
     setEditCampaignSlug(campaign.slug);
     setEditCampaignStatus(campaign.status);
-  }, [campaign]);
+  }, [campaign?.id, campaign?.name, campaign?.slug, campaign?.status]);
+
+  const hasLiveRun = campaign?.runs.some((run) => run.status === 'QUEUED' || run.status === 'RUNNING') ?? false;
+
+  useEffect(() => {
+    if (view !== 'runs' || !selectedId || !hasLiveRun) return;
+    const timer = window.setInterval(() => {
+      void refreshDetail(selectedId).catch(() => undefined);
+    }, 1200);
+    return () => window.clearInterval(timer);
+  }, [view, selectedId, hasLiveRun]);
 
   function clearMessages() {
     setError('');
@@ -236,11 +268,7 @@ export default function HomePage() {
     try {
       await request(`/campaigns/${campaign.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          name: editCampaignName,
-          slug: editCampaignSlug,
-          status: editCampaignStatus,
-        }),
+        body: JSON.stringify({ name: editCampaignName, slug: editCampaignSlug, status: editCampaignStatus }),
       });
       await refresh(campaign.id);
       setSuccess('Đã lưu thông tin chiến dịch.');
@@ -302,11 +330,7 @@ export default function HomePage() {
     try {
       await request(`/campaigns/${campaign.id}/content/${contentId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          title: editContentTitle || null,
-          body: editContentBody,
-          mediaUrl: editContentMediaUrl || null,
-        }),
+        body: JSON.stringify({ title: editContentTitle || null, body: editContentBody, mediaUrl: editContentMediaUrl || null }),
       });
       setEditingContentId('');
       await refresh(campaign.id);
@@ -341,12 +365,7 @@ export default function HomePage() {
     try {
       await request(`/campaigns/${campaign.id}/targets`, {
         method: 'POST',
-        body: JSON.stringify({
-          name: targetName,
-          externalId: targetExternalId || null,
-          type: targetType,
-          mode: targetMode,
-        }),
+        body: JSON.stringify({ name: targetName, externalId: targetExternalId || null, type: targetType, mode: targetMode }),
       });
       setTargetName('');
       setTargetExternalId('');
@@ -376,12 +395,7 @@ export default function HomePage() {
     try {
       await request(`/campaigns/${campaign.id}/targets/${targetId}`, {
         method: 'PATCH',
-        body: JSON.stringify({
-          name: editTargetName,
-          externalId: editTargetExternalId || null,
-          type: editTargetType,
-          mode: editTargetMode,
-        }),
+        body: JSON.stringify({ name: editTargetName, externalId: editTargetExternalId || null, type: editTargetType, mode: editTargetMode }),
       });
       setEditingTargetId('');
       await refresh(campaign.id);
@@ -419,15 +433,32 @@ export default function HomePage() {
       const run = await request<RunResult>(`/campaigns/${campaign.id}/run`, { method: 'POST' });
       setResult(run);
       await refresh(campaign.id);
-      setSuccess(`Đã tạo run với ${run.queued} job.`);
+      setView('runs');
+      setSuccess(`Dry Run đã tạo ${run.queued} job. Không có bài nào được đăng ra ngoài.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể chạy chiến dịch');
+      setError(err instanceof Error ? err.message : 'Không thể chạy dry run');
     } finally {
       setRunning(false);
     }
   }
 
+  async function retryJob(runId: string, jobId: string) {
+    if (!campaign) return;
+    setRetryingJobId(jobId);
+    clearMessages();
+    try {
+      await request(`/campaigns/${campaign.id}/runs/${runId}/jobs/${jobId}/retry`, { method: 'POST' });
+      await refreshDetail(campaign.id);
+      setSuccess('Đã đưa job lỗi trở lại hàng đợi Dry Run.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không thể chạy lại job');
+    } finally {
+      setRetryingJobId('');
+    }
+  }
+
   const latestRun = campaign?.runs[0];
+  const latestStats = statsForRun(latestRun);
   const activeTargets = campaign?.targets.filter((target) => target.active) ?? [];
   const apiTargets = activeTargets.filter((target) => target.mode === 'API').length;
   const manualTargets = activeTargets.length - apiTargets;
@@ -449,7 +480,7 @@ export default function HomePage() {
             <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => setView(item.id)}>{item.label}</button>
           ))}
         </nav>
-        <div className="sidebarFoot">MVP · v0.3.0</div>
+        <div className="sidebarFoot">MVP · v0.4.0 · Dry Run</div>
       </aside>
 
       <section className="content">
@@ -483,20 +514,20 @@ export default function HomePage() {
               <>
                 <section className="heroCard">
                   <div>
-                    <span className="pill">{campaign.slug.toUpperCase()}</span>
-                    <h2>Điều phối chiến dịch từ một nơi, theo dõi từng job rõ ràng.</h2>
-                    <p>Campaign, nội dung, target và lịch sử run đều đang đọc trực tiếp từ PostgreSQL. Khi chạy, BullMQ tạo job và worker ghi trạng thái ngược lại database.</p>
+                    <div className="heroPills"><span className="pill">{campaign.slug.toUpperCase()}</span><span className="pill safePill">DRY RUN · KHÔNG ĐĂNG THẬT</span></div>
+                    <h2>Chạy thử toàn bộ luồng trước khi kết nối Facebook thật.</h2>
+                    <p>AutoSpace sẽ tạo Campaign Run, gán caption cho từng target, đưa job qua Redis/BullMQ và để worker xử lý. API target dừng ở “Sẵn sàng cho provider”; group cần thao tác người dùng dừng ở “Chờ xác nhận”.</p>
                   </div>
                   <button className="runButton" onClick={runCampaign} disabled={running || !activeTargets.length || !campaign.contentVariants.length}>
-                    {running ? 'ĐANG XẾP HÀNG…' : '▶  CHẠY CHIẾN DỊCH'}
+                    {running ? 'ĐANG TẠO DRY RUN…' : '▶  CHẠY DRY RUN'}
                   </button>
                 </section>
 
                 <section className="metrics">
                   <article><span>Điểm phân phối</span><strong>{activeTargets.length}</strong><small>{apiTargets} API · {manualTargets} xác nhận</small></article>
                   <article><span>Biến thể nội dung</span><strong>{campaign.contentVariants.length}</strong><small>Sẵn sàng để phân phối</small></article>
-                  <article><span>Run gần nhất</span><strong>{latestRun?.publishJobs.length ?? 0}</strong><small>{statusLabel(latestRun?.status ?? 'Chưa chạy')}</small></article>
-                  <article><span>Tổng chiến dịch</span><strong>{campaigns.length}</strong><small>Đang quản lý trong hệ thống</small></article>
+                  <article><span>Dry Run gần nhất</span><strong>{latestStats.total}</strong><small>{statusLabel(latestRun?.status ?? 'Chưa chạy')}</small></article>
+                  <article><span>Tiến độ run</span><strong>{latestStats.progress}%</strong><small>{latestStats.ready} provider · {latestStats.manual} xác nhận</small></article>
                 </section>
 
                 <section className="twoCol">
@@ -619,21 +650,54 @@ export default function HomePage() {
 
             {view === 'runs' && (
               <section className="runsPage">
-                <div className="runsHeader"><div><p className="eyebrow">LỊCH SỬ XỬ LÝ</p><h2>Campaign runs</h2><p>Hiển thị 10 lần chạy gần nhất cùng trạng thái từng Publish Job.</p></div><button className="secondaryButton" onClick={() => void refresh(campaign.id)}>↻ Làm mới</button></div>
-                {campaign.runs.map((run) => (
-                  <article className="runCard" key={run.id}>
-                    <div className="runTop"><div><span className="runId">RUN · {shortId(run.id)}</span><h3>{statusLabel(run.status)}</h3><small>{new Date(run.createdAt).toLocaleString('vi-VN')}</small></div><span className={`runStatus status-${run.status.toLowerCase()}`}>{statusLabel(run.status)}</span></div>
-                    <div className="jobList">
-                      {run.publishJobs.map((job) => (
-                        <div className="jobRow" key={job.id}>
-                          <div><b>{job.target?.name ?? 'Target'}</b><small>{job.contentVariant?.title || 'Không có tiêu đề'} · {shortId(job.id)}</small></div>
-                          <span>{statusLabel(job.status)}</span>
-                        </div>
-                      ))}
+                <div className="runsHeader">
+                  <div><p className="eyebrow">DRY RUN MONITOR</p><h2>Hàng đợi & kết quả</h2><p>Tự làm mới khi run đang chạy. Dry Run không gọi API đăng bài ra bên ngoài.</p></div>
+                  <div className="buttonRow"><button className="secondaryButton" onClick={() => void refreshDetail(campaign.id)}>↻ Làm mới</button><button className="primaryButton" onClick={runCampaign} disabled={running}>{running ? 'Đang tạo…' : '▶ Dry Run mới'}</button></div>
+                </div>
+
+                {latestRun && (
+                  <section className="runSummary">
+                    <div className="runSummaryTop"><div><span>RUN GẦN NHẤT</span><strong>{statusLabel(latestRun.status)}</strong></div><b>{latestStats.progress}%</b></div>
+                    <div className="progressTrack"><span style={{ width: `${latestStats.progress}%` }} /></div>
+                    <div className="runCounters">
+                      <div><b>{latestStats.total}</b><span>Tổng job</span></div>
+                      <div><b>{latestStats.queued}</b><span>Đang chờ</span></div>
+                      <div><b>{latestStats.running}</b><span>Đang xử lý</span></div>
+                      <div><b>{latestStats.ready}</b><span>Chờ provider</span></div>
+                      <div><b>{latestStats.manual}</b><span>Chờ xác nhận</span></div>
+                      <div><b>{latestStats.failed}</b><span>Lỗi</span></div>
                     </div>
-                  </article>
-                ))}
-                {!campaign.runs.length && <div className="emptyRow largeEmpty">Chưa có run nào. Quay về Tổng quan và bấm “Chạy chiến dịch”.</div>}
+                  </section>
+                )}
+
+                {campaign.runs.map((run) => {
+                  const stats = statsForRun(run);
+                  return (
+                    <article className="runCard" key={run.id}>
+                      <div className="runTop">
+                        <div><span className="runId">DRY RUN · {shortId(run.id)}</span><h3>{statusLabel(run.status)}</h3><small>{new Date(run.createdAt).toLocaleString('vi-VN')} · {stats.total} job</small></div>
+                        <div className="runTopRight"><span className={`runStatus status-${run.status.toLowerCase()}`}>{statusLabel(run.status)}</span><b>{stats.progress}%</b></div>
+                      </div>
+                      <div className="miniProgress"><span style={{ width: `${stats.progress}%` }} /></div>
+                      <div className="jobList">
+                        {run.publishJobs.map((job) => (
+                          <div className={`jobRow ${job.status === 'FAILED' ? 'jobFailed' : ''}`} key={job.id}>
+                            <div className="jobMain">
+                              <div className="jobTitleLine"><b>{job.target?.name ?? 'Target'}</b><em className={job.target?.mode === 'API' ? 'apiTag' : 'manualTag'}>{job.target?.mode === 'API' ? 'API' : 'XÁC NHẬN'}</em></div>
+                              <small>{job.contentVariant?.title || 'Không có tiêu đề'} · {shortId(job.id)}</small>
+                              {job.error && <p className="jobError">{job.error}</p>}
+                            </div>
+                            <div className="jobActions">
+                              <span className={`jobStatus status-${job.status.toLowerCase()}`}>{statusLabel(job.status)}</span>
+                              {job.status === 'FAILED' && <button className="retryButton" disabled={retryingJobId === job.id} onClick={() => void retryJob(run.id, job.id)}>{retryingJobId === job.id ? 'Đang thử lại…' : '↻ Chạy lại'}</button>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  );
+                })}
+                {!campaign.runs.length && <div className="emptyRow largeEmpty">Chưa có run nào. Bấm “Dry Run mới” để chạy thử toàn bộ luồng.</div>}
               </section>
             )}
           </>
@@ -641,7 +705,7 @@ export default function HomePage() {
 
         {(success || error || result) && (
           <section className={`notice ${error ? 'noticeError' : ''}`}>
-            {error || success || (result ? `Run ${result.runId}: ${result.queued} job đã được xếp hàng.` : '')}
+            {error || success || (result ? `Dry Run ${result.runId}: ${result.queued} job đã được xếp hàng.` : '')}
           </section>
         )}
       </section>
