@@ -21,7 +21,7 @@ export type ProviderTargetSnapshot = {
 };
 
 export type ProviderPreparation = {
-  status: PublishJobStatus.READY_FOR_PROVIDER | PublishJobStatus.WAITING_CONNECTION;
+  status: PublishJobStatus;
   provider: string;
   message: string;
 };
