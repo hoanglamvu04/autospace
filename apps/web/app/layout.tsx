@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import './runs.css';
 
 export const metadata: Metadata = {
   title: 'AutoSpace',
