@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import './runs.css';
 import './connections.css';
+import './route-navigation.css';
+import RouteNavigation from './route-navigation';
 
 export const metadata: Metadata = {
   title: 'AutoSpace',
@@ -11,7 +13,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body>
+        <RouteNavigation />
+        {children}
+      </body>
     </html>
   );
 }
