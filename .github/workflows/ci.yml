@@ -61,6 +61,30 @@ jobs:
             npm run build
             pm2 startOrRestart ecosystem.config.cjs --update-env
             pm2 save
+
+            wait_for_url() {
+              url="$1"
+              mode="${2:-get}"
+              for attempt in $(seq 1 30); do
+                if [ "$mode" = "head" ]; then
+                  if curl -fsSI "$url" >/dev/null 2>&1; then
+                    return 0
+                  fi
+                else
+                  if curl -fsS "$url" >/dev/null 2>&1; then
+                    return 0
+                  fi
+                fi
+                sleep 2
+              done
+              echo "Service did not become ready: $url" >&2
+              pm2 status || true
+              pm2 logs autospace-api --lines 40 --nostream || true
+              pm2 logs autospace-web --lines 40 --nostream || true
+              return 1
+            }
+
+            wait_for_url http://127.0.0.1:4015/api/health
+            wait_for_url http://127.0.0.1:3015 head
             curl -fsS http://127.0.0.1:4015/api/health
-            curl -fsSI http://127.0.0.1:3015 >/dev/null
           REMOTE
