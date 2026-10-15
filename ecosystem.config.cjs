@@ -4,7 +4,7 @@ module.exports = {
       name: 'autospace-web',
       cwd: __dirname,
       script: 'npm',
-      args: 'run start -w @autospace/web',
+      args: 'run start -w @autospace/web -- -H 127.0.0.1 -p 3015',
       env: { NODE_ENV: 'production' },
     },
     {
