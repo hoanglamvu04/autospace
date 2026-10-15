@@ -153,7 +153,7 @@ export class ConnectionsService implements OnModuleDestroy {
     const row = await this.prisma.providerConnection.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Connection not found');
 
-    let status = ConnectionStatus.CONNECTED;
+    let status: ConnectionStatus = ConnectionStatus.CONNECTED;
     let lastError: string | null = null;
 
     try {
