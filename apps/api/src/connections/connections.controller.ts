@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/commo
 import {
   ConnectionsService,
   CreateConnectionInput,
+  PublishConnectionInput,
   UpdateConnectionInput,
 } from './connections.service';
 
@@ -37,5 +38,10 @@ export class ConnectionsController {
   @Post(':id/test')
   test(@Param('id') id: string) {
     return this.connections.test(id);
+  }
+
+  @Post(':id/publish')
+  publish(@Param('id') id: string, @Body() body: PublishConnectionInput) {
+    return this.connections.publish(id, body);
   }
 }

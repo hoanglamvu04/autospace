@@ -22,6 +22,32 @@ export type CreateConnectionInput = {
 
 export type UpdateConnectionInput = Partial<CreateConnectionInput>;
 
+export type PublishConnectionInput = {
+  message?: string;
+  link?: string | null;
+};
+
+type MetaErrorBody = {
+  error?: {
+    message?: string;
+    type?: string;
+    code?: number;
+    error_subcode?: number;
+    fbtrace_id?: string;
+  };
+};
+
+class MetaGraphError extends Error {
+  constructor(
+    message: string,
+    readonly code?: number,
+    readonly subcode?: number,
+  ) {
+    super(message);
+    this.name = 'MetaGraphError';
+  }
+}
+
 function requiredText(value: unknown, field: string) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new BadRequestException(`${field} is required`);
@@ -60,6 +86,49 @@ function decryptCredentials(payload: string): ConnectionCredentials {
     decipher.final(),
   ]).toString('utf8');
   return JSON.parse(plaintext) as ConnectionCredentials;
+}
+
+function metaVersion() {
+  const value = process.env.META_GRAPH_API_VERSION?.trim() || 'v26.0';
+  return value.startsWith('v') ? value : `v${value}`;
+}
+
+async function metaRequest<T>(
+  path: string,
+  accessToken: string,
+  init?: RequestInit,
+): Promise<T> {
+  const url = `https://graph.facebook.com/${metaVersion()}/${path.replace(/^\//, '')}`;
+  const headers = new Headers(init?.headers);
+  headers.set('Authorization', `Bearer ${accessToken}`);
+  if (init?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/x-www-form-urlencoded;charset=UTF-8');
+  }
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const payload = (await response.json().catch(() => ({}))) as T & MetaErrorBody;
+  const metaError = payload.error;
+  if (!response.ok || metaError) {
+    throw new MetaGraphError(
+      metaError?.message || `Meta Graph API returned ${response.status}`,
+      metaError?.code,
+      metaError?.error_subcode,
+    );
+  }
+
+  return payload as T;
+}
+
+function statusForMetaError(error: unknown): ConnectionStatus {
+  if (!(error instanceof MetaGraphError)) return ConnectionStatus.ERROR;
+  if (error.code === 190) return ConnectionStatus.EXPIRED;
+  if (error.code === 10 || error.code === 200) return ConnectionStatus.MISSING_PERMISSION;
+  return ConnectionStatus.ERROR;
 }
 
 @Injectable()
@@ -155,32 +224,55 @@ export class ConnectionsService implements OnModuleDestroy {
 
     let status: ConnectionStatus = ConnectionStatus.CONNECTED;
     let lastError: string | null = null;
+    let providerData: Record<string, unknown> | null = null;
+    let testMode = 'CONFIGURATION_ONLY';
 
     try {
       const credentials = row.secretEncrypted ? decryptCredentials(row.secretEncrypted) : {};
       const config = (row.publicConfig ?? {}) as Record<string, unknown>;
 
       if (row.provider === ConnectionProvider.FACEBOOK_PAGE) {
+        testMode = 'LIVE_META';
         if (!row.externalAccountId) {
-          status = ConnectionStatus.ERROR;
-          lastError = 'Thiếu Page ID / external account ID';
-        } else if (!credentials.accessToken) {
-          status = ConnectionStatus.MISSING_PERMISSION;
-          lastError = 'Chưa có Page access token';
+          throw new BadRequestException('Thiếu Page ID / external account ID');
         }
+        if (!credentials.accessToken) {
+          status = ConnectionStatus.MISSING_PERMISSION;
+          throw new BadRequestException('Chưa có Page access token');
+        }
+
+        const page = await metaRequest<{ id: string; name: string }>(
+          'me?fields=id,name',
+          credentials.accessToken,
+        );
+
+        if (String(page.id) !== String(row.externalAccountId)) {
+          status = ConnectionStatus.ERROR;
+          throw new BadRequestException(
+            `Token thuộc Page ${page.name} (${page.id}), không khớp Page ID ${row.externalAccountId}`,
+          );
+        }
+
+        providerData = {
+          pageId: page.id,
+          pageName: page.name,
+          graphVersion: metaVersion(),
+        };
       }
 
       if (row.provider === ConnectionProvider.WEBSITE) {
         if (typeof config.baseUrl !== 'string' || !config.baseUrl.trim()) {
           status = ConnectionStatus.ERROR;
-          lastError = 'Thiếu base URL của website provider';
-        } else if (!credentials.apiKey) {
+          throw new BadRequestException('Thiếu base URL của website provider');
+        }
+        if (!credentials.apiKey) {
           status = ConnectionStatus.MISSING_PERMISSION;
-          lastError = 'Chưa có API key';
+          throw new BadRequestException('Chưa có API key');
         }
       }
     } catch (error) {
-      status = ConnectionStatus.ERROR;
+      if (error instanceof MetaGraphError) status = statusForMetaError(error);
+      else if (status === ConnectionStatus.CONNECTED) status = ConnectionStatus.ERROR;
       lastError = error instanceof Error ? error.message : 'Không thể kiểm tra connection';
     }
 
@@ -192,12 +284,100 @@ export class ConnectionsService implements OnModuleDestroy {
 
     return {
       ...this.publicConnection(updated),
-      testMode: 'CONFIGURATION_ONLY',
+      testMode,
+      providerData,
       message:
         status === ConnectionStatus.CONNECTED
-          ? 'Cấu hình provider hợp lệ. Chưa gọi API bên ngoài ở Connections V1.'
+          ? row.provider === ConnectionProvider.FACEBOOK_PAGE
+            ? `Meta xác nhận Page access token hợp lệ cho ${String(providerData?.pageName ?? row.name)}.`
+            : 'Cấu hình website provider hợp lệ.'
           : lastError,
     };
+  }
+
+  async publish(id: string, input: PublishConnectionInput) {
+    const row = await this.prisma.providerConnection.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Connection not found');
+    if (row.provider !== ConnectionProvider.FACEBOOK_PAGE) {
+      throw new BadRequestException('Live publish V1 hiện chỉ hỗ trợ Facebook Page');
+    }
+    if (!row.externalAccountId) throw new BadRequestException('Connection chưa có Page ID');
+    if (!row.secretEncrypted) throw new BadRequestException('Connection chưa có credential');
+
+    const message = requiredText(input.message, 'message');
+    const link = input.link?.trim() || null;
+    if (link) {
+      let parsed: URL;
+      try {
+        parsed = new URL(link);
+      } catch {
+        throw new BadRequestException('link must be a valid URL');
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new BadRequestException('link must use http or https');
+      }
+    }
+
+    const credentials = decryptCredentials(row.secretEncrypted);
+    if (!credentials.accessToken) throw new BadRequestException('Connection chưa có Page access token');
+
+    try {
+      const page = await metaRequest<{ id: string; name: string }>(
+        'me?fields=id,name',
+        credentials.accessToken,
+      );
+      if (String(page.id) !== String(row.externalAccountId)) {
+        throw new BadRequestException(
+          `Token thuộc Page ${page.name} (${page.id}), không khớp Page ID ${row.externalAccountId}`,
+        );
+      }
+
+      const form = new URLSearchParams({ message });
+      if (link) form.set('link', link);
+
+      const published = await metaRequest<{ id: string }>(
+        `${row.externalAccountId}/feed`,
+        credentials.accessToken,
+        { method: 'POST', body: form },
+      );
+
+      let permalinkUrl: string | null = null;
+      try {
+        const detail = await metaRequest<{ id: string; permalink_url?: string }>(
+          `${published.id}?fields=id,permalink_url`,
+          credentials.accessToken,
+        );
+        permalinkUrl = detail.permalink_url ?? null;
+      } catch {
+        // Publishing already succeeded. A permalink lookup failure must not mark the post as failed.
+      }
+
+      await this.prisma.providerConnection.update({
+        where: { id },
+        data: {
+          status: ConnectionStatus.CONNECTED,
+          lastError: null,
+          lastTestedAt: new Date(),
+        },
+      });
+
+      return {
+        published: true,
+        provider: 'FACEBOOK_PAGE',
+        page: { id: page.id, name: page.name },
+        postId: published.id,
+        permalinkUrl,
+        graphVersion: metaVersion(),
+      };
+    } catch (error) {
+      const status = error instanceof MetaGraphError ? statusForMetaError(error) : ConnectionStatus.ERROR;
+      const messageText = error instanceof Error ? error.message : 'Không thể đăng bài lên Facebook Page';
+      await this.prisma.providerConnection.update({
+        where: { id },
+        data: { status, lastError: messageText, lastTestedAt: new Date() },
+      });
+      throw new BadRequestException(messageText);
+    }
   }
 
   private cleanCredentials(credentials: ConnectionCredentials) {
