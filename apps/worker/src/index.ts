@@ -18,6 +18,8 @@ const connection = {
   password: process.env.REDIS_PASSWORD || undefined,
 };
 
+const dryRunDelayMs = Number(process.env.DRY_RUN_DELAY_MS ?? 900);
+
 type DistributionJobData = {
   campaignId: string;
   runId: string;
@@ -26,6 +28,10 @@ type DistributionJobData = {
   contentVariantId: string | null;
   mode: TargetMode;
 };
+
+function sleep(ms: number) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
 
 async function finalizePreparation(runId: string) {
   const pending = await prisma.publishJob.count({
@@ -70,9 +76,13 @@ const worker = new Worker(
         data: {
           status: RunStatus.RUNNING,
           startedAt: run?.startedAt ?? new Date(),
+          finishedAt: null,
         },
       }),
     ]);
+
+    console.log(`[dry-run] processing campaign=${data.campaignId} target=${data.targetId} job=${data.publishJobId}`);
+    await sleep(dryRunDelayMs);
 
     if (job.name === 'prepare-manual-target' || data.mode === TargetMode.MANUAL_CONFIRMATION) {
       await prisma.publishJob.update({
@@ -80,21 +90,21 @@ const worker = new Worker(
         data: { status: PublishJobStatus.AWAITING_CONFIRMATION },
       });
       await finalizePreparation(data.runId);
-      return { status: PublishJobStatus.AWAITING_CONFIRMATION, targetId: data.targetId };
+      return { dryRun: true, status: PublishJobStatus.AWAITING_CONFIRMATION, targetId: data.targetId };
     }
 
-    // Provider adapters are connected in the next integration layer. Until a
-    // channel has valid credentials, the job stops here instead of pretending
-    // that a post was published successfully.
+    // Dry Run V1 stops before any external publish call. API-authorized targets
+    // become READY_FOR_PROVIDER so the dashboard proves the whole queue path
+    // without posting anything to Facebook or another provider.
     await prisma.publishJob.update({
       where: { id: data.publishJobId },
       data: { status: PublishJobStatus.READY_FOR_PROVIDER },
     });
     await finalizePreparation(data.runId);
 
-    return { status: PublishJobStatus.READY_FOR_PROVIDER, targetId: data.targetId };
+    return { dryRun: true, status: PublishJobStatus.READY_FOR_PROVIDER, targetId: data.targetId };
   },
-  { connection, concurrency: 5 },
+  { connection, concurrency: 3 },
 );
 
 worker.on('completed', (job, result) => {
@@ -128,4 +138,4 @@ async function shutdown() {
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
 
-console.log('AutoSpace worker started: campaign-distribution');
+console.log(`AutoSpace worker started: campaign-distribution (dry-run delay ${dryRunDelayMs}ms)`);
