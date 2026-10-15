@@ -1,14 +1,14 @@
 # AutoSpace
 
-AutoSpace là trung tâm quản lý chiến dịch phân phối nội dung: tạo campaign, quản lý content variant, target, xếp hàng BullMQ và theo dõi trạng thái từng job trong PostgreSQL.
+AutoSpace là trung tâm quản lý chiến dịch phân phối nội dung: tạo campaign, quản lý content variant, target, provider connection, xếp hàng BullMQ và theo dõi trạng thái từng job trong PostgreSQL.
 
-Hệ thống chỉ tự động xuất bản khi một provider có API/quyền hợp lệ. Target chưa có provider phù hợp sẽ dừng ở `READY_FOR_PROVIDER` hoặc `AWAITING_CONFIRMATION`, không giả lập rằng bài đã được đăng thành công.
+Hệ thống chỉ tự động xuất bản khi một provider có API/quyền hợp lệ. Dry Run không gọi API đăng bài ra bên ngoài. Target API chưa gắn connection hợp lệ dừng ở `WAITING_CONNECTION`; target cần thao tác người dùng dừng ở `AWAITING_CONFIRMATION`.
 
 ## Stack
 
 - `apps/web`: Next.js 16 + React 19 + TypeScript
 - `apps/api`: NestJS 12 + BullMQ
-- `apps/worker`: BullMQ worker
+- `apps/worker`: BullMQ worker + provider adapter registry
 - `packages/database`: Prisma 7 + PostgreSQL + `@prisma/adapter-pg`
 - Redis: hàng đợi tác vụ
 - PM2: chạy production trên VPS, không dùng Docker
@@ -34,9 +34,17 @@ Mặc định:
 - API: `http://localhost:4000/api`
 - Health: `http://localhost:4000/api/health`
 
-Lần đầu mở dashboard, bấm **Tạo Hola Halo**. API sẽ tạo dữ liệu mẫu trực tiếp trong PostgreSQL gồm campaign, content variant và target. Sau đó dashboard không còn dùng dữ liệu hard-code.
+Trước khi lưu credential provider, tạo khóa mã hóa 32 byte:
+
+```bash
+openssl rand -hex 32
+```
+
+và đặt giá trị đó vào `CONNECTION_ENCRYPTION_KEY` trong `.env`. Secret provider được mã hóa AES-256-GCM trước khi lưu PostgreSQL và không được trả ngược về frontend.
 
 ## API MVP
+
+### Campaign
 
 - `GET /api/campaigns` — danh sách campaign + thống kê
 - `POST /api/campaigns` — tạo campaign
@@ -46,19 +54,35 @@ Lần đầu mở dashboard, bấm **Tạo Hola Halo**. API sẽ tạo dữ li�
 - `DELETE /api/campaigns/:id` — xóa campaign
 - `POST /api/campaigns/:id/content` — thêm content variant
 - `POST /api/campaigns/:id/targets` — thêm target
-- `DELETE /api/campaigns/:id/targets/:targetId` — ngừng target, không xóa lịch sử job
-- `POST /api/campaigns/:id/run` — tạo CampaignRun, gán content cho từng target và đưa job vào Redis
+- `PATCH /api/campaigns/:id/targets/:targetId` — cập nhật target và gắn `connectionId`
+- `POST /api/campaigns/:id/run` — tạo Dry Run và đưa job vào Redis
 
-## Luồng dữ liệu
+### Connections V1
 
-1. Dashboard đọc campaign từ PostgreSQL qua API.
-2. Khi chạy chiến dịch, API tạo `CampaignRun` và `PublishJob` trước.
-3. Mỗi target được gán một `ContentVariant` theo vòng lặp.
+- `GET /api/connections` — danh sách provider connection an toàn, không trả secret
+- `POST /api/connections` — tạo connection và mã hóa credential
+- `GET /api/connections/:id` — chi tiết connection + target đang dùng
+- `PATCH /api/connections/:id` — cập nhật cấu hình/credential
+- `DELETE /api/connections/:id` — xóa connection, target liên quan tự bỏ liên kết
+- `POST /api/connections/:id/test` — kiểm tra cấu hình provider ở V1, chưa gọi API bên ngoài
+
+Provider V1 hiện có:
+
+- `FACEBOOK_PAGE`
+- `WEBSITE`
+
+## Luồng Dry Run + Provider
+
+1. Dashboard đọc campaign và connection từ PostgreSQL qua API.
+2. Target API có thể gắn một `ProviderConnection` tương thích.
+3. Khi chạy Dry Run, API tạo `CampaignRun` và `PublishJob` trước.
 4. BullMQ nhận job với `publishJobId`, `targetId`, `contentVariantId`.
-5. Worker cập nhật trạng thái job ngược lại PostgreSQL.
-6. Target `API` chưa gắn provider thật dừng ở `READY_FOR_PROVIDER`.
-7. Target cần thao tác người dùng dừng ở `AWAITING_CONFIRMATION`.
-8. Khi toàn bộ job đã được chuẩn bị, run chuyển sang `PREPARED`.
+5. Worker chọn provider adapter theo loại target.
+6. API target chưa có connection hoặc connection chưa `CONNECTED` dừng ở `WAITING_CONNECTION`.
+7. API target có connection hợp lệ dừng ở `READY_FOR_PROVIDER`.
+8. Target thủ công dừng ở `AWAITING_CONFIRMATION`.
+9. Không có provider nào publish thật trong Connections V1.
+10. Khi toàn bộ job đã được chuẩn bị, run chuyển sang `PREPARED`.
 
 ## Prisma 7
 
@@ -89,9 +113,9 @@ Trước khi build production, đặt `WEB_ORIGIN` và `NEXT_PUBLIC_API_URL` đ�
 
 ## Bước tiếp theo
 
-- màn hình CRUD campaign/content/target đầy đủ
-- provider adapter cho Facebook Page được cấp quyền hợp lệ
+- Facebook Page provider gọi Graph API thật trên Page được cấp quyền
+- Website provider adapter thật cho các CMS/API do người dùng quản lý
+- refresh/expiry handling cho token
 - scheduler theo ngày/giờ
-- retry và event log chi tiết
-- xác nhận thủ công cho target không có API xuất bản phù hợp
-- thống kê click/chuyển đổi theo campaign
+- event log chi tiết và retry provider
+- analytics click/chuyển đổi theo campaign
