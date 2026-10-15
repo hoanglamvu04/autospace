@@ -7,6 +7,7 @@ import {
   TargetMode,
   createPrismaClient,
 } from '@autospace/database';
+import { prepareProvider } from './providers';
 
 config({ path: resolve(process.cwd(), '.env') });
 config({ path: resolve(process.cwd(), '../../.env'), override: false });
@@ -60,7 +61,19 @@ const worker = new Worker(
   'campaign-distribution',
   async (job: Job<DistributionJobData>) => {
     const data = job.data;
-    const run = await prisma.campaignRun.findUnique({ where: { id: data.runId } });
+    const [run, target] = await Promise.all([
+      prisma.campaignRun.findUnique({ where: { id: data.runId } }),
+      prisma.distributionTarget.findUnique({
+        where: { id: data.targetId },
+        include: {
+          connection: {
+            select: { id: true, name: true, provider: true, status: true },
+          },
+        },
+      }),
+    ]);
+
+    if (!target) throw new Error(`Distribution target ${data.targetId} not found`);
 
     await prisma.$transaction([
       prisma.publishJob.update({
@@ -90,19 +103,32 @@ const worker = new Worker(
         data: { status: PublishJobStatus.AWAITING_CONFIRMATION },
       });
       await finalizePreparation(data.runId);
-      return { dryRun: true, status: PublishJobStatus.AWAITING_CONFIRMATION, targetId: data.targetId };
+      return {
+        dryRun: true,
+        status: PublishJobStatus.AWAITING_CONFIRMATION,
+        targetId: data.targetId,
+        provider: 'manual-confirmation',
+      };
     }
 
-    // Dry Run V1 stops before any external publish call. API-authorized targets
-    // become READY_FOR_PROVIDER so the dashboard proves the whole queue path
-    // without posting anything to Facebook or another provider.
+    const preparation = prepareProvider(target);
     await prisma.publishJob.update({
       where: { id: data.publishJobId },
-      data: { status: PublishJobStatus.READY_FOR_PROVIDER },
+      data: { status: preparation.status },
     });
     await finalizePreparation(data.runId);
 
-    return { dryRun: true, status: PublishJobStatus.READY_FOR_PROVIDER, targetId: data.targetId };
+    console.log(
+      `[provider:${preparation.provider}] target=${data.targetId} status=${preparation.status} ${preparation.message}`,
+    );
+
+    return {
+      dryRun: true,
+      status: preparation.status,
+      targetId: data.targetId,
+      provider: preparation.provider,
+      message: preparation.message,
+    };
   },
   { connection, concurrency: 3 },
 );
