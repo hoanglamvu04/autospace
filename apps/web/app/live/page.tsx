@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import styles from './live.module.css';
 
 type ProviderConnection = {
   id: string;
@@ -136,28 +137,38 @@ export default function LivePublishPage() {
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: '#f3f5ef', padding: '32px 20px 64px', color: '#11281d' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-        <a href="/" style={{ color: '#466954', textDecoration: 'none', fontWeight: 700 }}>← AutoSpace Dashboard</a>
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <div className={styles.topline}>
+          <a href="/" className={styles.back}>← Quay lại Campaign Hub</a>
+          <span className={styles.brandChip}><i className={styles.brandDot} /> AutoSpace · Facebook Provider</span>
+        </div>
 
-        <header style={{ margin: '28px 0 24px' }}>
-          <p style={{ letterSpacing: 2, fontSize: 12, fontWeight: 800, color: '#758173', marginBottom: 8 }}>FACEBOOK PAGE PROVIDER V1</p>
-          <h1 style={{ fontSize: 42, lineHeight: 1.05, margin: 0 }}>Đăng bài thật lên Facebook Page</h1>
-          <p style={{ maxWidth: 760, fontSize: 17, lineHeight: 1.6, color: '#647268' }}>
-            Trang này gọi Meta Graph API thật. “Test Meta thật” chỉ kiểm tra Page ID + token. “Đăng thật” sẽ tạo bài viết công khai trên Page đã chọn.
-          </p>
+        <header className={styles.header}>
+          <div>
+            <p className={styles.eyebrow}>FACEBOOK PAGE PROVIDER · LIVE</p>
+            <h1>Đăng bài thật, nhưng vẫn kiểm soát từng bước.</h1>
+            <p>Kiểm tra Page access token trước khi publish. AutoSpace chỉ đăng lên Page bạn đã kết nối và luôn yêu cầu xác nhận cuối cùng.</p>
+          </div>
+          <span className={styles.liveBadge}>LIVE MODE</span>
         </header>
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, .85fr) minmax(0, 1.15fr)', gap: 22 }}>
-          <article style={{ background: '#10271d', color: 'white', padding: 28, borderRadius: 24, alignSelf: 'start' }}>
-            <p style={{ marginTop: 0, color: '#bcd5c0', fontWeight: 800, fontSize: 12, letterSpacing: 1.5 }}>CONNECTION</p>
-            <label style={{ display: 'grid', gap: 8, fontWeight: 700 }}>
-              Facebook Page
+        <section className={styles.workspace}>
+          <aside className={styles.providerCard}>
+            <div className={styles.providerTop}>
+              <div>
+                <span className={styles.providerLabel}>Connection</span>
+                <h2>Facebook Page</h2>
+              </div>
+            </div>
+
+            <label className={styles.selectLabel}>
+              Tài khoản sử dụng
               <select
+                className={styles.select}
                 value={connectionId}
                 onChange={(event) => setConnectionId(event.target.value)}
                 disabled={loading}
-                style={{ padding: 14, borderRadius: 12, border: 0, fontSize: 16 }}
               >
                 {facebookConnections.map((item) => (
                   <option value={item.id} key={item.id}>{item.name} · {statusLabel(item.status)}</option>
@@ -166,65 +177,93 @@ export default function LivePublishPage() {
             </label>
 
             {selected ? (
-              <div style={{ marginTop: 20, padding: 18, borderRadius: 16, background: 'rgba(255,255,255,.08)' }}>
-                <strong style={{ display: 'block', fontSize: 20 }}>{selected.name}</strong>
-                <span style={{ display: 'block', color: '#bdd0c3', marginTop: 5 }}>Page ID: {selected.externalAccountId ?? 'chưa có'}</span>
-                <span style={{ display: 'block', color: '#bdd0c3', marginTop: 5 }}>Trạng thái: {statusLabel(selected.status)}</span>
-                {selected.lastError && <p style={{ color: '#ffd0c8' }}>{selected.lastError}</p>}
+              <div className={styles.account}>
+                <div className={styles.accountHead}>
+                  <span className={styles.avatar}>f</span>
+                  <div>
+                    <strong>{selected.name}</strong>
+                    <small>Facebook Page</small>
+                  </div>
+                </div>
+                <div className={styles.accountMeta}>
+                  <div className={styles.metaRow}><span>Page ID</span><b>{selected.externalAccountId ?? 'Chưa có'}</b></div>
+                  <div className={styles.metaRow}><span>Trạng thái</span><b>{statusLabel(selected.status)}</b></div>
+                </div>
               </div>
             ) : (
-              <p>Chưa có Facebook Page connection.</p>
+              <div className={styles.emptyAccount}>Chưa có Facebook Page connection. Hãy quay lại mục Kết nối tài khoản để thêm Page.</div>
             )}
 
             <button
+              className={styles.testButton}
               onClick={() => void testConnection()}
               disabled={!selected || testing}
-              style={{ width: '100%', marginTop: 18, padding: '14px 16px', borderRadius: 13, border: 0, fontWeight: 900, cursor: 'pointer' }}
             >
-              {testing ? 'ĐANG GỌI META…' : '✓ TEST META THẬT'}
+              {testing ? 'ĐANG KIỂM TRA META…' : '✓ TEST META THẬT'}
             </button>
-          </article>
 
-          <form onSubmit={publish} style={{ background: 'white', padding: 28, borderRadius: 24, border: '1px solid #dfe4db' }}>
-            <div style={{ padding: '12px 14px', borderRadius: 12, background: '#fff1e8', color: '#9a3e1c', fontWeight: 800, marginBottom: 20 }}>
-              ⚠ Đây là LIVE MODE. Nút cuối cùng sẽ đăng bài thật lên Facebook.
+            <div className={styles.securityNote}>
+              <span className={styles.securityIcon}>⌁</span>
+              <span>Token được đọc ở backend và không hiển thị lại trên trình duyệt.</span>
+            </div>
+          </aside>
+
+          <form onSubmit={publish} className={styles.composer}>
+            <div className={styles.composerTop}>
+              <div>
+                <h2>Bài viết mới</h2>
+                <p>Soạn nội dung rồi xác nhận trước khi gửi sang Meta.</p>
+              </div>
+              <span className={styles.count}>{message.length} ký tự</span>
             </div>
 
-            <label style={{ display: 'grid', gap: 8, fontWeight: 800 }}>
+            <div className={styles.warning}>
+              <span className={styles.warningIcon}>!</span>
+              <span>Đây là chế độ đăng thật. Sau khi xác nhận, bài viết sẽ xuất hiện công khai trên Facebook Page đã chọn.</span>
+            </div>
+
+            <label className={styles.field}>
               Nội dung bài viết
               <textarea
-                rows={10}
+                className={styles.textarea}
+                rows={9}
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Nhập nội dung muốn đăng thật…"
+                placeholder="Nhập nội dung muốn đăng lên Page…"
                 required
-                style={{ resize: 'vertical', padding: 15, borderRadius: 13, border: '1px solid #cad3c8', font: 'inherit', lineHeight: 1.55 }}
               />
             </label>
 
-            <label style={{ display: 'grid', gap: 8, fontWeight: 800, marginTop: 16 }}>
-              Link đính kèm (tùy chọn)
+            <label className={`${styles.field} ${styles.inputWrap}`}>
+              Link đính kèm <span style={{ fontWeight: 500, color: '#8a958e' }}>(tùy chọn)</span>
               <input
+                className={styles.input}
                 value={link}
                 onChange={(event) => setLink(event.target.value)}
                 placeholder="https://holahalo.vn"
-                style={{ padding: 14, borderRadius: 13, border: '1px solid #cad3c8', font: 'inherit' }}
               />
             </label>
 
             <button
+              className={styles.publishButton}
               disabled={!selected || publishing || !message.trim()}
-              style={{ width: '100%', marginTop: 22, padding: '17px 18px', borderRadius: 14, border: 0, background: '#d6f0ad', color: '#113220', fontWeight: 950, fontSize: 17, cursor: 'pointer' }}
             >
-              {publishing ? 'ĐANG ĐĂNG LÊN META…' : '🚀 ĐĂNG THẬT LÊN FACEBOOK'}
+              {publishing ? 'ĐANG GỬI LÊN META…' : 'ĐĂNG THẬT LÊN FACEBOOK  →'}
             </button>
 
-            {error && <div style={{ marginTop: 18, padding: 14, borderRadius: 12, background: '#ffe7e3', color: '#9c3026' }}>{error}</div>}
-            {success && <div style={{ marginTop: 18, padding: 14, borderRadius: 12, background: '#e7f5df', color: '#315f31' }}>{success}</div>}
-            {result?.permalinkUrl && (
-              <a href={result.permalinkUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginTop: 14, color: '#1b5d38', fontWeight: 800 }}>
-                Mở bài viết trên Facebook ↗
-              </a>
+            {error && <div className={`${styles.alert} ${styles.error}`}>{error}</div>}
+            {success && <div className={`${styles.alert} ${styles.success}`}>{success}</div>}
+
+            {result && (
+              <div className={styles.resultCard}>
+                <b>Đã publish thành công</b>
+                <span>Post ID: {result.postId} · Graph API {result.graphVersion}</span>
+                {result.permalinkUrl && (
+                  <a href={result.permalinkUrl} target="_blank" rel="noreferrer" className={styles.postLink}>
+                    Mở bài viết trên Facebook ↗
+                  </a>
+                )}
+              </div>
             )}
           </form>
         </section>
