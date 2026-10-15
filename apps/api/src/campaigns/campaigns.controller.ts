@@ -85,4 +85,13 @@ export class CampaignsController {
   run(@Param('id') id: string) {
     return this.campaigns.run(id);
   }
+
+  @Post(':id/runs/:runId/jobs/:jobId/retry')
+  retryJob(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.campaigns.retryJob(id, runId, jobId);
+  }
 }
