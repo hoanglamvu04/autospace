@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   CampaignStatus,
+  ConnectionProvider,
   PublishJobStatus,
   RunStatus,
   TargetMode,
@@ -38,6 +39,7 @@ export type CreateTargetInput = {
   externalId?: string | null;
   type?: TargetType;
   mode?: TargetMode;
+  connectionId?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -103,14 +105,30 @@ export class CampaignsService implements OnModuleDestroy {
       where: { OR: [{ id: identifier }, { slug: identifier }] },
       include: {
         contentVariants: { orderBy: { createdAt: 'asc' } },
-        targets: { orderBy: { createdAt: 'asc' } },
+        targets: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            connection: {
+              select: { id: true, name: true, provider: true, status: true, lastTestedAt: true },
+            },
+          },
+        },
         runs: {
           orderBy: { createdAt: 'desc' },
           take: 10,
           include: {
             publishJobs: {
               orderBy: { createdAt: 'asc' },
-              include: { target: true, contentVariant: true },
+              include: {
+                target: {
+                  include: {
+                    connection: {
+                      select: { id: true, name: true, provider: true, status: true },
+                    },
+                  },
+                },
+                contentVariant: true,
+              },
             },
           },
         },
@@ -193,14 +211,20 @@ export class CampaignsService implements OnModuleDestroy {
     const campaign = await this.findRecord(identifier);
     if (!input.type || !Object.values(TargetType).includes(input.type)) throw new BadRequestException('type is invalid');
     if (!input.mode || !Object.values(TargetMode).includes(input.mode)) throw new BadRequestException('mode is invalid');
+    await this.validateConnection(input.connectionId ?? null, input.type);
+
     return this.prisma.distributionTarget.create({
       data: {
         campaignId: campaign.id,
+        connectionId: input.connectionId?.trim() || null,
         name: requiredText(input.name, 'name'),
         externalId: input.externalId?.trim() || null,
         type: input.type,
         mode: input.mode,
         metadata: input.metadata as any,
+      },
+      include: {
+        connection: { select: { id: true, name: true, provider: true, status: true } },
       },
     });
   }
@@ -209,9 +233,15 @@ export class CampaignsService implements OnModuleDestroy {
     const campaign = await this.findRecord(identifier);
     const target = await this.prisma.distributionTarget.findFirst({ where: { id: targetId, campaignId: campaign.id } });
     if (!target) throw new NotFoundException('Target not found');
+
+    const effectiveType = input.type ?? target.type;
+    const effectiveConnectionId = input.connectionId !== undefined ? input.connectionId : target.connectionId;
+    await this.validateConnection(effectiveConnectionId ?? null, effectiveType);
+
     const data: any = {};
     if (input.name !== undefined) data.name = requiredText(input.name, 'name');
     if (input.externalId !== undefined) data.externalId = input.externalId?.trim() || null;
+    if (input.connectionId !== undefined) data.connectionId = input.connectionId?.trim() || null;
     if (input.type !== undefined) {
       if (!Object.values(TargetType).includes(input.type)) throw new BadRequestException('type is invalid');
       data.type = input.type;
@@ -222,7 +252,14 @@ export class CampaignsService implements OnModuleDestroy {
     }
     if (input.metadata !== undefined) data.metadata = input.metadata as any;
     if (input.active !== undefined) data.active = Boolean(input.active);
-    return this.prisma.distributionTarget.update({ where: { id: target.id }, data });
+
+    return this.prisma.distributionTarget.update({
+      where: { id: target.id },
+      data,
+      include: {
+        connection: { select: { id: true, name: true, provider: true, status: true } },
+      },
+    });
   }
 
   async deactivateTarget(identifier: string, targetId: string) {
@@ -271,7 +308,11 @@ export class CampaignsService implements OnModuleDestroy {
     const campaign = await this.prisma.campaign.findFirst({
       where: { OR: [{ id: identifier }, { slug: identifier }] },
       include: {
-        targets: { where: { active: true }, orderBy: { createdAt: 'asc' } },
+        targets: {
+          where: { active: true },
+          orderBy: { createdAt: 'asc' },
+          include: { connection: true },
+        },
         contentVariants: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -292,7 +333,14 @@ export class CampaignsService implements OnModuleDestroy {
           })),
         },
       },
-      include: { publishJobs: { include: { target: true, contentVariant: true } } },
+      include: {
+        publishJobs: {
+          include: {
+            target: { include: { connection: true } },
+            contentVariant: true,
+          },
+        },
+      },
     });
 
     try {
@@ -322,7 +370,7 @@ export class CampaignsService implements OnModuleDestroy {
     const campaign = await this.findRecord(identifier);
     const job = await this.prisma.publishJob.findFirst({
       where: { id: jobId, runId, run: { campaignId: campaign.id } },
-      include: { target: true, contentVariant: true },
+      include: { target: { include: { connection: true } }, contentVariant: true },
     });
     if (!job) throw new NotFoundException('Publish job not found');
     if (job.status !== PublishJobStatus.FAILED) throw new BadRequestException('Only failed jobs can be retried');
@@ -388,6 +436,26 @@ export class CampaignsService implements OnModuleDestroy {
         removeOnFail: 500,
       },
     };
+  }
+
+  private async validateConnection(connectionId: string | null, type: TargetType) {
+    if (!connectionId) return;
+    const connection = await this.prisma.providerConnection.findUnique({ where: { id: connectionId } });
+    if (!connection) throw new BadRequestException('connectionId does not exist');
+
+    const expectedProvider =
+      type === TargetType.FACEBOOK_PAGE
+        ? ConnectionProvider.FACEBOOK_PAGE
+        : type === TargetType.WEBSITE
+          ? ConnectionProvider.WEBSITE
+          : null;
+
+    if (!expectedProvider) {
+      throw new BadRequestException('This target type does not support provider connections in V1');
+    }
+    if (connection.provider !== expectedProvider) {
+      throw new BadRequestException(`Connection provider must be ${expectedProvider} for target type ${type}`);
+    }
   }
 
   private async findRecord(identifier: string) {
