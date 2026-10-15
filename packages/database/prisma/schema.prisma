@@ -40,10 +40,24 @@ enum RunStatus {
 enum PublishJobStatus {
   QUEUED
   RUNNING
+  WAITING_CONNECTION
   READY_FOR_PROVIDER
   AWAITING_CONFIRMATION
   COMPLETED
   FAILED
+}
+
+enum ConnectionProvider {
+  FACEBOOK_PAGE
+  WEBSITE
+}
+
+enum ConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  EXPIRED
+  MISSING_PERMISSION
+  ERROR
 }
 
 model Campaign {
@@ -74,21 +88,41 @@ model ContentVariant {
   @@index([campaignId])
 }
 
+model ProviderConnection {
+  id                String             @id @default(cuid())
+  name              String
+  provider          ConnectionProvider
+  status            ConnectionStatus   @default(DISCONNECTED)
+  externalAccountId String?
+  publicConfig      Json?
+  secretEncrypted   String?
+  lastTestedAt      DateTime?
+  lastError         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  targets           DistributionTarget[]
+
+  @@index([provider, status])
+}
+
 model DistributionTarget {
-  id          String       @id @default(cuid())
-  campaignId  String
-  name        String
-  externalId  String?
-  type        TargetType
-  mode        TargetMode
-  active      Boolean      @default(true)
-  metadata    Json?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  publishJobs PublishJob[]
+  id           String              @id @default(cuid())
+  campaignId   String
+  connectionId String?
+  name         String
+  externalId   String?
+  type         TargetType
+  mode         TargetMode
+  active       Boolean             @default(true)
+  metadata     Json?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  campaign     Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  connection   ProviderConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  publishJobs  PublishJob[]
 
   @@index([campaignId, active])
+  @@index([connectionId])
 }
 
 model CampaignRun {
@@ -105,19 +139,19 @@ model CampaignRun {
 }
 
 model PublishJob {
-  id               String           @id @default(cuid())
+  id               String             @id @default(cuid())
   runId            String
   targetId         String
   contentVariantId String?
   bullJobId        String?
-  status           PublishJobStatus @default(QUEUED)
+  status           PublishJobStatus   @default(QUEUED)
   resultUrl        String?
   error            String?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  run              CampaignRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  run              CampaignRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
   target           DistributionTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
-  contentVariant   ContentVariant?  @relation(fields: [contentVariantId], references: [id], onDelete: SetNull)
+  contentVariant   ContentVariant?    @relation(fields: [contentVariantId], references: [id], onDelete: SetNull)
 
   @@index([runId, status])
   @@index([targetId])
